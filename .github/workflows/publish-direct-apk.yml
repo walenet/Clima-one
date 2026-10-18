@@ -1,4 +1,4 @@
-name: Publish CLIMA ONE APK for direct Samsung download
+name: Publish CLIMA ONE LAB for Samsung
 on:
   push:
     paths:
@@ -11,22 +11,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch verified release APK into repository downloads folder
+      - name: Publish LAB 0.6 raw APK and restore trusted 0.5 release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           mkdir -p downloads
-          gh release download android-pro-controls-v05-20261018             --pattern CLIMA_ONE_ProControls_v0.5.apk             --dir downloads             --clobber
           test -s downloads/CLIMA_ONE_ProControls_v0.5.apk
-          file downloads/CLIMA_ONE_ProControls_v0.5.apk
-          sha256sum downloads/CLIMA_ONE_ProControls_v0.5.apk
+          gh release download android-lab-v06-20261018 \
+            --pattern CLIMA_ONE_LAB_v0.6.apk \
+            --dir downloads --clobber
+          test -s downloads/CLIMA_ONE_LAB_v0.6.apk
+          sha256sum downloads/CLIMA_ONE_LAB_v0.6.apk
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add downloads/CLIMA_ONE_ProControls_v0.5.apk
-          if git diff --cached --quiet; then
-            echo "APK already published"
-          else
-            git commit -m 'release: publish CLIMA ONE v0.5 APK for direct Android download'
+          git add downloads/CLIMA_ONE_LAB_v0.6.apk
+          if ! git diff --staged --quiet; then
+            git commit -m 'release: direct Chrome download CLIMA ONE LAB 0.6 APK'
             git push
           fi
+          gh release upload android-pro-controls-v05-20261018 \
+            downloads/CLIMA_ONE_ProControls_v0.5.apk --clobber
+          echo "Original v0.5 release restored, LAB 0.6 available via raw GitHub."
