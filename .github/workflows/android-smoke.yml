@@ -30,10 +30,10 @@ jobs:
           unzip -q CLIMA_ONE_ANDROID_NATIVA_v0.1.zip -d source
           cd source/CLIMA_ONE_Android_Native
           gradle --no-daemon assembleDebug
-      - name: Install and launch on Android 15 emulator
+      - name: Install and launch on Android 16 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 36
           target: google_apis
           arch: x86_64
           profile: pixel_6
