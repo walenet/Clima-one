@@ -44,6 +44,7 @@ public final class SafeEco {
             result.eco = true;
         } else {
             result.setpoint = Math.max(18,Math.min(30,result.setpoint - 3));
+            result.eco = false; // Native ECO is cooling-specific in this implementation.
         }
         result.fan = 20;
         result.turbo = false;
