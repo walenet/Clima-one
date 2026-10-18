@@ -87,7 +87,7 @@ public class MainActivity extends Activity {
         if(active==null)return;
         final String report=TechnicianReport.build(active,current,lastReadAt);
         ScrollView scroll=new ScrollView(this);
-        TextView lines=label(report,13,Color.rgb(40,50,55),false);
+        TextView lines=new TextView(this);lines.setText(report);lines.setTextSize(13);
         lines.setTextIsSelectable(true);
         lines.setPadding(dp(16),dp(12),dp(16),dp(12));
         scroll.addView(lines);
