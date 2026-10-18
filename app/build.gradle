@@ -4,11 +4,11 @@ android {
     namespace 'com.climaone.app'
     compileSdk 35
     defaultConfig {
-        applicationId 'com.climaone.app'
+        applicationId 'com.climaone.lab'
         minSdk 26
         targetSdk 35
-        versionCode 5
-        versionName '0.5.0-controls-tech-alpha'
+        versionCode 6
+        versionName '0.6.0-lab-features-alpha'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
