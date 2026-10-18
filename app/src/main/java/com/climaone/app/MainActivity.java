@@ -518,6 +518,21 @@ public class MainActivity extends Activity {
         if(current.mode==2){
             btn(control,current.eco?"✓  Disattiva ECO standard":"🍃  Attiva ECO standard",()->doControl(s->{if(s.mode!=2)throw new IllegalArgumentException("ECO nativo disponibile solo in Freddo");s.eco=!s.eco;}),false);
         }
+        btn(control,current.turbo?"Disattiva TURBO":"⚡ MAX nativo · TURBO (NON 150%)",()->{
+            if(!current.power||(current.mode!=2 && current.mode!=4)){
+                message("TURBO disponibile con macchina accesa in Freddo/Caldo.");return;
+            }
+            if(nativeCaps==null){message("Prima scansiona le funzioni native.");return;}
+            boolean supported=current.mode==2?
+                Boolean.TRUE.equals(nativeCaps.turboCool):
+                Boolean.TRUE.equals(nativeCaps.turboHeat);
+            if(!supported){message("Il firmware non ha confermato TURBO in questa modalità.");return;}
+            new AlertDialog.Builder(this).setTitle("MAX nativo del costruttore")
+                .setMessage("Non significa ventola al 150%. TURBO può aumentare anche la potenza del compressore.")
+                .setNegativeButton("Annulla",null)
+                .setPositiveButton("Applica",(d,w)->doControl(st->{st.turbo=!st.turbo;if(st.turbo)st.eco=false;}))
+                .show();
+        },false);
         space(control,7);
         control.addView(label("ECO AVANZATO · SENZA MODIFICARE L'INVERTER",13,CYAN,true));
         control.addView(label("Profili reversibili modificando nuovamente il setpoint. Nessun limite minimo del compressore viene forzato.",12,MUTED,false));
@@ -528,6 +543,8 @@ public class MainActivity extends Activity {
         View ecoGap=new View(this);ecoRow.addView(ecoGap,new LinearLayout.LayoutParams(dp(8),dp(2)));
         ecoRow.addView(ecoStrong,new LinearLayout.LayoutParams(0,dp(60),1));
         control.addView(ecoRow);
+        space(control,8);
+        btn(control,"🍃  SUPER ECO · Ventola 20% + riduzione domanda",this::superEcoDialog,true);
         space(control,10);
         btn(control,"↻  Aggiorna i dati reali",this::read,false);
         if(technicianMode){
