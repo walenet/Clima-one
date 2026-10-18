@@ -34,6 +34,7 @@ public class MainActivity extends Activity {
     private boolean busy=false;
     private boolean technicianMode=false;
     private volatile long lastReadAt=0;
+    private final ArrayList<String> technicianSamples=new ArrayList<>();
 
     @Override public void onCreate(Bundle b){super.onCreate(b);
         getWindow().setStatusBarColor(NAVY);getWindow().setNavigationBarColor(NAVY);
@@ -281,7 +282,7 @@ public class MainActivity extends Activity {
     private void read(){if(active==null)return;
         MideaLan.Device selected=active;
         busyTask("Interrogo il climatizzatore",()->{MideaLan.State state=DirectPairing.verifyRead(selected);if(active==selected){current=state;lastReadAt=System.currentTimeMillis();}return null;},
-            ()->{message("Dati ricevuti direttamente dalla macchina.");showSelected();});
+            ()->{appendTechnicianSample();message("Dati ricevuti direttamente dalla macchina.");showSelected();});
     }
     private void doControl(java.util.function.Consumer<MideaLan.State> change){
         if(active==null||current==null)return;
@@ -291,7 +292,34 @@ public class MainActivity extends Activity {
             MideaLan.State after=MideaLan.apply(selected,latest);
             if(active==selected){current=after;lastReadAt=System.currentTimeMillis();}
             return null;
-        },()->{message("Comando inviato. Stato riletto dal climatizzatore.");showSelected();});
+        },()->{appendTechnicianSample();message("Comando inviato. Stato riletto dal climatizzatore.");showSelected();});
+    }
+    private String csvValue(Double value){
+        return value==null || Double.isInfinite(value) || Double.isNaN(value)?"":String.format(Locale.US,"%.2f",value);
+    }
+    private void appendTechnicianSample(){
+        if(active==null||current==null)return;
+        String stamp=new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss",Locale.US).format(new Date());
+        technicianSamples.add(stamp+","+current.power+","+current.mode+","+
+            String.format(Locale.US,"%.1f",current.setpoint)+","+
+            csvValue(current.indoor)+","+csvValue(current.outdoor)+","+
+            csvValue(current.compressorHz)+","+csvValue(current.compressorTargetHz)+","+
+            csvValue(current.fanRpm)+","+csvValue(current.watts));
+        if(technicianSamples.size()>100)technicianSamples.remove(0);
+    }
+    private void shareTechnicianSamples(){
+        if(technicianSamples.isEmpty()){
+            message("Nessun campione ancora registrato. Premi Aggiorna i dati reali.");
+            return;
+        }
+        StringBuilder data=new StringBuilder("timestamp,acceso,modalita,setpoint_C,ambiente_C,esterno_C,compressore_Hz,target_Hz,ventola_rpm_equivalenti,potenza_W_stimata\\n");
+        for(String line:technicianSamples)data.append(line).append("\\n");
+        String caption="Campioni LAN da decodifica sperimentale; valori da validare con strumenti. Nessuna credenziale inclusa.\\n";
+        Intent send=new Intent(Intent.ACTION_SEND);
+        send.setType("text/plain");
+        send.putExtra(Intent.EXTRA_SUBJECT,"CLIMA ONE · Campioni diagnostici CSV");
+        send.putExtra(Intent.EXTRA_TEXT,caption+data.toString());
+        startActivity(Intent.createChooser(send,"Esporta campioni tecnico"));
     }
     private void chooseEcoPlus(int strength){
         if(current==null || active==null){message("Connetti e leggi prima lo stato reale.");return;}
@@ -399,6 +427,7 @@ public class MainActivity extends Activity {
         btn(diag,"Imposta tariffa €/kWh",this::tariffDialog,false);
         if(technicianMode){
             btn(diag,"🧰  Genera scheda diagnostica",this::showTechnicianReport,true);
+            btn(diag,"📈  Condividi dati CSV · "+technicianSamples.size()+" campioni",this::shareTechnicianSamples,false);
             diag.addView(label("Pressioni, surriscaldamento e quantita refrigerante NON sono misurati dalla LAN.",12,ORANGE,false));
         }
         diag.addView(label("I sensori possono non essere supportati; valori non verificati dal produttore.",12,MUTED,false));
