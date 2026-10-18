@@ -1,0 +1,32 @@
+name: Publish CLIMA ONE APK for direct Samsung download
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-direct-apk.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch verified release APK into repository downloads folder
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p downloads
+          gh release download android-pro-controls-v05-20261018             --pattern CLIMA_ONE_ProControls_v0.5.apk             --dir downloads             --clobber
+          test -s downloads/CLIMA_ONE_ProControls_v0.5.apk
+          file downloads/CLIMA_ONE_ProControls_v0.5.apk
+          sha256sum downloads/CLIMA_ONE_ProControls_v0.5.apk
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add downloads/CLIMA_ONE_ProControls_v0.5.apk
+          if git diff --cached --quiet; then
+            echo "APK already published"
+          else
+            git commit -m 'release: publish CLIMA ONE v0.5 APK for direct Android download'
+            git push
+          fi
