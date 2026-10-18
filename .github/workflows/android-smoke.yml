@@ -3,6 +3,9 @@ on:
   push:
     paths:
       - '.github/workflows/android-smoke.yml'
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,11 +28,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Build CLIMA ONE
-        run: |
-          unzip -q CLIMA_ONE_ANDROID_NATIVA_v0.1.zip -d source
-          cd source/CLIMA_ONE_Android_Native
-          gradle --no-daemon assembleDebug
+      - name: Build current CLIMA ONE code
+        run: gradle --no-daemon assembleDebug
       - name: Install and launch on Android 16 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -40,7 +40,7 @@ jobs:
           disable-animations: true
           script: |
             set -e
-            adb install -r source/CLIMA_ONE_Android_Native/app/build/outputs/apk/debug/app-debug.apk
+            adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb shell am start -W -n com.climaone.app/.MainActivity
             sleep 5
             adb shell pidof com.climaone.app
