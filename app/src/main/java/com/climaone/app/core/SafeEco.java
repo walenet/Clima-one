@@ -27,6 +27,29 @@ public final class SafeEco {
         return result;
     }
 
+    /**
+     * SUPER ECO software profile: reduces heating/cooling demand using only
+     * documented standard controls. No custom inverter/outdoor fan RPM writes.
+     * Optional native GEAR and outdoor silence are separate feature commands
+     * explicitly guarded by capability probing.
+     */
+    public static MideaLan.State superEco(MideaLan.State actual) {
+        if (actual == null || !actual.power)
+            throw new IllegalArgumentException("Leggi stato e accendi prima il climatizzatore");
+        if (actual.mode != 2 && actual.mode != 4)
+            throw new IllegalArgumentException("SUPER ECO solo in Freddo o Caldo");
+        MideaLan.State result = actual.copy();
+        if (result.mode == 2) {
+            result.setpoint = Math.min(30, Math.max(17,result.setpoint + 3));
+            result.eco = true;
+        } else {
+            result.setpoint = Math.max(18,Math.min(30,result.setpoint - 3));
+        }
+        result.fan = 20;
+        result.turbo = false;
+        return result;
+    }
+
     public static boolean indoorFanAdjustable(MideaLan.State actual) {
         return actual != null && actual.power &&
                (actual.mode == 2 || actual.mode == 4 || actual.mode == 5);
