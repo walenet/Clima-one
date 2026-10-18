@@ -547,10 +547,50 @@ public class MainActivity extends Activity {
         btn(control,"🍃  SUPER ECO · Ventola 20% + riduzione domanda",this::superEcoDialog,true);
         space(control,10);
         btn(control,"↻  Aggiorna i dati reali",this::read,false);
+        space(control,9);
+        control.addView(label("MODALITÀ NATIVE · RISPOSTE B5/B1",13,CYAN,true));
+        control.addView(label("Si abilitano soltanto le funzioni di cui la macchina restituisce un tag riconosciuto. Assenza di risposta: non verificato.",12,MUTED,false));
+        btn(control,"⌕  Cerca BreezeleSS, GEAR e SILENT",this::scanNativeFeatures,false);
+        if(nativeCaps!=null){
+            AdvancedMidea.Snapshot caps=nativeCaps;
+            control.addView(label("BreezeleSS: "+featureFlag(caps.breezeless)+
+                "  ·  SILENT esterno: "+featureFlag(caps.outdoorSilent),12,WHITE,false));
+            control.addView(label("GEAR: "+featureFlag(caps.gearAvailable)+
+                "  ·  Turbo CALDO: "+featureFlag(caps.turboHeat),12,MUTED,false));
+            if(caps.canBreeze()){
+                if(current.mode==4){
+                    btn(control,"❄  Prova BreezeleSS in CALDO (sperimentale)",
+                        ()->advancedControl(AdvancedMidea.BREEZELESS,1,"BreezeleSS in CALDO",true),false);
+                }else if(current.mode==2){
+                    btn(control,Boolean.TRUE.equals(caps.breezeless)?
+                        "Disattiva BreezeleSS":"Attiva BreezeleSS nativo",
+                        ()->advancedControl(AdvancedMidea.BREEZELESS,
+                            Boolean.TRUE.equals(caps.breezeless)?0:1,"BreezeleSS",false),false);
+                }
+                if(Boolean.TRUE.equals(caps.breezeless)){
+                    btn(control,"⏹  Arresta BreezeleSS",
+                        ()->advancedControl(AdvancedMidea.BREEZELESS,0,"Stop BreezeleSS",false),false);
+                }
+            }
+            if(caps.canOutdoorSilent()){
+                btn(control,Boolean.TRUE.equals(caps.outdoorSilent)?
+                        "Spegni SILENT esterno":"🌙  Silenziosità unità ESTERNA",
+                    ()->advancedControl(AdvancedMidea.OUTDOOR_SILENT,
+                        Boolean.TRUE.equals(caps.outdoorSilent)?0:3,
+                        "SILENT esterno nativo",false),false);
+            }
+            if(current.mode==2 && caps.canGear50()){
+                btn(control,"⚙  GEAR 50% · limite potenza nativo",
+                    ()->advancedControl(AdvancedMidea.GEAR,50,"GEAR 50%",false),false);
+                btn(control,"GEAR 75% · limite potenza nativo",
+                    ()->advancedControl(AdvancedMidea.GEAR,75,"GEAR 75%",false),false);
+                btn(control,"Ripristina GEAR 100%",
+                    ()->advancedControl(AdvancedMidea.GEAR,100,"GEAR 100%",false),false);
+            }
+        }
         if(technicianMode){
             control.addView(label("FUNZIONI PROFESSIONALI · IN SVILUPPO",13,CYAN,true));
-            btn(control,"❄  BreezeleSS anche in CALDO · Disponibilità",()->advancedFeatureInfo("breeze"),false);
-            btn(control,"⚙  Compressore / ventola ESTERNA · Limiti",()->advancedFeatureInfo("inverter"),false);
+            btn(control,"⚙  Limiti compressore / ventola esterna",()->advancedFeatureInfo("inverter"),false);
         }
         space(reportBox,12);
         LinearLayout diag=vertical();card(reportBox,diag);diag.addView(label(technicianMode?"DIAGNOSTICA TECNICO · DATI DA VALIDARE":"TELEMETRIA DISPONIBILE",12,CYAN,true));
