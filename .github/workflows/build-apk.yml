@@ -14,6 +14,15 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Verify Midea protocol commands and safety limits
+        run: |
+          mkdir -p "$RUNNER_TEMP/protocol-tests"
+          javac -d "$RUNNER_TEMP/protocol-tests" \
+            app/src/main/java/com/climaone/app/core/MideaLan.java \
+            app/src/main/java/com/climaone/app/core/AdvancedMidea.java \
+            app/src/main/java/com/climaone/app/core/SafeEco.java \
+            tests/ProtocolSmoke.java
+          java -cp "$RUNNER_TEMP/protocol-tests" ProtocolSmoke
       - name: Install Android SDK 35
         run: |
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -1)"
