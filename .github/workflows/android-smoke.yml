@@ -41,9 +41,9 @@ jobs:
           script: |
             set -e
             adb install -r app/build/outputs/apk/debug/app-debug.apk
-            adb shell am start -W -n com.climaone.app/.MainActivity
+            adb shell am start -W -n com.climaone.lab/com.climaone.app.MainActivity
             sleep 5
-            adb shell pidof com.climaone.app
+            adb shell pidof com.climaone.lab
             adb shell screencap -p /sdcard/clima-one-screen.png
             adb pull /sdcard/clima-one-screen.png clima-one-screen.png
             adb shell uiautomator dump /sdcard/window.xml
