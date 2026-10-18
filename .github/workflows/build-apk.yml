@@ -4,7 +4,7 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,8 +28,22 @@ jobs:
           unzip -q CLIMA_ONE_ANDROID_NATIVA_v0.1.zip -d source
           cd source/CLIMA_ONE_Android_Native
           gradle --no-daemon assembleDebug
+      - name: Verify Android package and signature
+        run: |
+          APK="source/CLIMA_ONE_Android_Native/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -15
+          cp "$APK" CLIMA_ONE_Android_alpha.apk
+          sha256sum CLIMA_ONE_Android_alpha.apk
       - uses: actions/upload-artifact@v4
         with:
           name: CLIMA-ONE-Android-APK
-          path: source/CLIMA_ONE_Android_Native/app/build/outputs/apk/debug/app-debug.apk
+          path: CLIMA_ONE_Android_alpha.apk
           if-no-files-found: error
+      - name: Create public download release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view android-alpha-20261018 >/dev/null 2>&1 || gh release create android-alpha-20261018 --title "CLIMA ONE Android alpha" --notes "APK sperimentale per test rete Wi-Fi Midea. Non modificare firmware o parametri inverter."
+          gh release upload android-alpha-20261018 CLIMA_ONE_Android_alpha.apk --clobber
