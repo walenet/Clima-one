@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.content.res.ColorStateList;
 import com.climaone.app.core.SafeEco;
+import com.climaone.app.core.AdvancedMidea;
 import android.net.wifi.WifiManager;
 import android.text.InputType;
 import android.view.*;
@@ -35,6 +36,7 @@ public class MainActivity extends Activity {
     private boolean technicianMode=false;
     private volatile long lastReadAt=0;
     private final ArrayList<String> technicianSamples=new ArrayList<>();
+    private AdvancedMidea.Snapshot nativeCaps;
 
     @Override public void onCreate(Bundle b){super.onCreate(b);
         getWindow().setStatusBarColor(NAVY);getWindow().setNavigationBarColor(NAVY);
@@ -182,7 +184,7 @@ public class MainActivity extends Activity {
         }
         if(devices.isEmpty())box.addView(label("Ancora nessun dispositivo.",14,MUTED,false));
     }
-    private void choose(MideaLan.Device d){active=d;current=null;lastReadAt=0;drawDevices();showSelected();}
+    private void choose(MideaLan.Device d){active=d;current=null;nativeCaps=null;lastReadAt=0;drawDevices();showSelected();}
     private void showSelected(){
         controlBox.removeAllViews();reportBox.removeAllViews();
         if(active==null)return;
@@ -293,6 +295,126 @@ public class MainActivity extends Activity {
             if(active==selected){current=after;lastReadAt=System.currentTimeMillis();}
             return null;
         },()->{appendTechnicianSample();message("Comando inviato. Stato riletto dal climatizzatore.");showSelected();});
+    }
+    private String featureFlag(Boolean flag){
+        return flag==null?"non confermato":flag?"attivo/supportato":"spento/non disponibile";
+    }
+    private void scanNativeFeatures(){
+        if(active==null || current==null){
+            message("Leggi prima lo stato reale del climatizzatore.");
+            return;
+        }
+        final MideaLan.Device unit=active;
+        final AdvancedMidea.Snapshot[] result=new AdvancedMidea.Snapshot[1];
+        busyTask("Interrogo le funzioni native B5/B1",()->{
+            result[0]=AdvancedMidea.inspect(unit);
+            return null;
+        },()->{
+            if(active==unit){
+                nativeCaps=result[0];
+                showSelected();
+                message("Scansione B5/B1 completata. Le funzioni non riportate restano disabilitate.");
+            }
+        });
+    }
+    private void advancedControl(int tag,int desired,String title,boolean heatingTest){
+        if(active==null || current==null || nativeCaps==null){
+            message("Prima leggi stato e scansiona le funzioni B5/B1.");
+            return;
+        }
+        if(tag==AdvancedMidea.BREEZELESS&&!nativeCaps.canBreeze()){
+            message("La macchina non ha confermato BreezeleSS.");
+            return;
+        }
+        if(tag==AdvancedMidea.OUTDOOR_SILENT&&!nativeCaps.canOutdoorSilent()){
+            message("Silenziosita esterna non riportata dalla macchina.");
+            return;
+        }
+        if(tag==AdvancedMidea.GEAR &&
+           (current.mode!=2 || !nativeCaps.canGear50())){
+            message("GEAR 50/75 richiede conferma B5 ed e disponibile qui solo in Freddo.");
+            return;
+        }
+        String notice="Invio di un solo comando nativo Midea. Verifica risposta B1, non modifica limiti di sicurezza.";
+        if(heatingTest){
+            notice="BreezeleSS in CALDO non e garantito dal costruttore. Il modulo puo rifiutare o ignorare il comando. Controlla la macchina: se noti flusso anomalo o errori, disattiva la funzione. Nessun registro inverter sara modificato.\n\n"+notice;
+        }
+        final MideaLan.Device unit=active;
+        new AlertDialog.Builder(this).setTitle(title)
+            .setMessage(notice).setNegativeButton("Annulla",null)
+            .setPositiveButton("Invia e verifica",(dialog,which)->{
+                final String[] result=new String[1];
+                busyTask("Verifico "+title+" via LAN",()->{
+                    int confirmed=AdvancedMidea.applyVerified(unit,tag,desired);
+                    AdvancedMidea.Snapshot caps=AdvancedMidea.inspect(unit);
+                    MideaLan.State state=MideaLan.readState(unit);
+                    if(active==unit){
+                        nativeCaps=caps;current=state;
+                        lastReadAt=System.currentTimeMillis();
+                    }
+                    result[0]=title+": valore "+confirmed+
+                        " confermato via LAN. Verifica anche il comportamento fisico.";
+                    return null;
+                },()->{
+                    if(active==unit){
+                        appendTechnicianSample();showSelected();message(result[0]);
+                    }
+                });
+            }).show();
+    }
+    private void superEcoDialog(){
+        if(active==null||current==null){message("Prima leggi lo stato reale.");return;}
+        final MideaLan.State preview;
+        try{preview=SafeEco.superEco(current);}
+        catch(Exception error){message(error.getMessage());return;}
+        final MideaLan.Device unit=active;
+        String explanation="SUPER ECO applica i controlli normali:\n"+
+            "• Setpoint "+String.format(Locale.ITALY,"%.1f",preview.setpoint)+" °C\n"+
+            "• Ventola interna 20% (minimo standard)\n"+
+            "• TURBO spento\n"+
+            "• ECO nativo in Freddo\n\n"+
+            "Se il tuo firmware risponde ai tag GEAR 50% o SILENT esterno, proverò anche quelli. Sono funzioni native, NON comandi per impostare i giri di compressore o ventola esterna. Il risparmio elettrico va misurato.";
+        new AlertDialog.Builder(this)
+            .setTitle("SUPER ECO · regolazione protetta")
+            .setMessage(explanation)
+            .setNegativeButton("Annulla",null)
+            .setPositiveButton("Attiva",(dialog,which)->{
+                final String[] result=new String[1];
+                busyTask("Attivo profilo Super ECO",()->{
+                    AdvancedMidea.Snapshot caps=null;
+                    try{caps=AdvancedMidea.inspect(unit);}
+                    catch(Exception ignored){}
+                    MideaLan.State before=MideaLan.readState(unit);
+                    MideaLan.State request=SafeEco.superEco(before);
+                    MideaLan.apply(unit,request);
+                    StringBuilder msg=new StringBuilder("Super ECO: setpoint e ventola inviati; stato riletto.");
+                    if(caps!=null && before.mode==2 && caps.canGear50()){
+                        try{
+                            AdvancedMidea.applyVerified(unit,AdvancedMidea.GEAR,50);
+                            msg.append(" GEAR 50% confermato.");
+                        }catch(Exception ignored){msg.append(" GEAR 50% non confermato.");}
+                    }
+                    if(caps!=null && caps.canOutdoorSilent()){
+                        try{
+                            AdvancedMidea.applyVerified(unit,AdvancedMidea.OUTDOOR_SILENT,3);
+                            msg.append(" SILENT esterno confermato.");
+                        }catch(Exception ignored){msg.append(" SILENT esterno non confermato.");}
+                    }
+                    try{caps=AdvancedMidea.inspect(unit);}catch(Exception ignored){}
+                    MideaLan.State after=MideaLan.readState(unit);
+                    if(active==unit){
+                        current=after;
+                        lastReadAt=System.currentTimeMillis();
+                        nativeCaps=caps;
+                    }
+                    result[0]=msg.toString()+" Confronta consumi e comfort.";
+                    return null;
+                },()->{
+                    if(active==unit){
+                        appendTechnicianSample();showSelected();message(result[0]);
+                    }
+                });
+            }).show();
     }
     private String csvValue(Double value){
         return value==null || Double.isInfinite(value) || Double.isNaN(value)?"":String.format(Locale.US,"%.2f",value);
