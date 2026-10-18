@@ -31,16 +31,16 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -15
-          cp "$APK" CLIMA_ONE_Android_TECH_v0.2.apk
-          sha256sum CLIMA_ONE_Android_TECH_v0.2.apk
+          cp "$APK" CLIMA_ONE_Android_LAN_v0.3.apk
+          sha256sum CLIMA_ONE_Android_LAN_v0.3.apk
       - uses: actions/upload-artifact@v4
         with:
           name: CLIMA-ONE-Android-APK
-          path: CLIMA_ONE_Android_TECH_v0.2.apk
+          path: CLIMA_ONE_Android_LAN_v0.3.apk
           if-no-files-found: error
       - name: Create public download release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view android-tech-alpha-20261018 >/dev/null 2>&1 || gh release create android-tech-alpha-20261018 --title "CLIMA ONE Android TECH alpha v0.2" --notes "Versione sperimentale. Modalita TECNICO con scheda e dati LAN disponibili. Il controllo Midea V3 deve ancora essere validato su climatizzatori reali; non modificare firmware o limiti inverter."
-          gh release upload android-tech-alpha-20261018 CLIMA_ONE_Android_TECH_v0.2.apk --clobber
+          gh release view android-lan-alpha-20261018 >/dev/null 2>&1 || gh release create android-lan-alpha-20261018 --title "CLIMA ONE Android LAN Pairing alpha v0.3" --notes "Versione alpha: test collegamento diretto V3 sulla rete locale. Richiede token e key V3 validi, ottenuti separatamente o via recupero una tantum da servizio Midea con autorizzazione. La lettura di stato reale e il controllo non sono ancora verificati sul modello pilota. Nessuna modifica firmware."
+          gh release upload android-lan-alpha-20261018 CLIMA_ONE_Android_LAN_v0.3.apk --clobber
