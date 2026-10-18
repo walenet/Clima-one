@@ -6,6 +6,9 @@ import android.content.*;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.content.res.ColorStateList;
+import com.climaone.app.core.SafeEco;
 import android.net.wifi.WifiManager;
 import android.text.InputType;
 import android.view.*;
@@ -37,14 +40,53 @@ public class MainActivity extends Activity {
         technicianMode=getPreferences(MODE_PRIVATE).getBoolean("technician_mode",false);
         render();
     }
-    private GradientDrawable shape(int fill,int radius){GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setCornerRadius(dp(radius));return d;}
+    private GradientDrawable shape(int fill,int radius){
+        GradientDrawable d=new GradientDrawable();
+        d.setColor(fill);d.setCornerRadius(dp(radius));
+        return d;
+    }
     private int dp(int n){return (int)(n*getResources().getDisplayMetrics().density);}
     private TextView label(String text,int sp,int color,boolean bold){TextView t=new TextView(this);t.setText(text);t.setTextColor(color);t.setTextSize(sp);if(bold)t.setTypeface(null,Typeface.BOLD);t.setPadding(0,dp(3),0,dp(3));return t;}
     private LinearLayout vertical(){LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;}
     private void space(LinearLayout parent,int h){View x=new View(this);parent.addView(x,new LinearLayout.LayoutParams(1,dp(h)));}
-    private void card(LinearLayout p,LinearLayout v){v.setPadding(dp(18),dp(15),dp(18),dp(15));v.setBackground(shape(CARD,20));p.addView(v,new LinearLayout.LayoutParams(-1,-2));}
-    private Button button(String text,Runnable onClick,boolean emphasis){Button b=new Button(this);b.setAllCaps(false);b.setText(text);b.setTextColor(emphasis?NAVY:WHITE);b.setTextSize(15);b.setBackground(shape(emphasis?CYAN:Color.rgb(48,74,89),16));b.setOnClickListener(v->{if(!busy)onClick.run();});return b;}
-    private void btn(LinearLayout p,String text,Runnable onClick,boolean emphasis){Button b=button(text,onClick,emphasis);p.addView(b,new LinearLayout.LayoutParams(-1,dp(54)));space(p,7);}
+    private void card(LinearLayout p,LinearLayout v){
+        v.setPadding(dp(18),dp(17),dp(18),dp(17));
+        GradientDrawable bg=shape(CARD,22);
+        bg.setStroke(dp(1),Color.rgb(38,65,81));
+        v.setBackground(bg);
+        v.setElevation(dp(3));
+        p.addView(v,new LinearLayout.LayoutParams(-1,-2));
+    }
+    private Button button(String text,Runnable onClick,boolean emphasis){
+        Button b=new Button(this);
+        b.setAllCaps(false);
+        b.setText(text);
+        b.setTextColor(emphasis?NAVY:WHITE);
+        b.setTextSize(15);
+        b.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
+        b.setLetterSpacing(0.005f);
+        b.setPadding(dp(12),dp(5),dp(12),dp(5));
+        b.setMinHeight(dp(56));
+        b.setMinWidth(dp(48));
+        b.setGravity(Gravity.CENTER);
+        int fill=emphasis?CYAN:Color.rgb(49,75,93);
+        GradientDrawable bg=shape(fill,17);
+        bg.setStroke(dp(1),emphasis?Color.rgb(135,239,234):Color.rgb(75,108,127));
+        b.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(emphasis?0x44091E2B:0x66FFFFFF),bg,null));
+        b.setElevation(dp(2));
+        b.setOnClickListener(v->{
+            v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+            if(!busy){onClick.run();}
+            else{message("Operazione in corso: attendi la risposta del climatizzatore.");}
+        });
+        return b;
+    }
+    private void btn(LinearLayout p,String text,Runnable onClick,boolean emphasis){
+        Button b=button(text,onClick,emphasis);
+        p.addView(b,new LinearLayout.LayoutParams(-1,dp(58)));
+        space(p,9);
+    }
     private void message(String text){runOnUiThread(()->{statusText.setText(text);});}
     private void busyTask(String heading,Callable<?> work,Runnable onSuccess){
         if(busy)return;busy=true;message(heading+"…");
@@ -251,6 +293,40 @@ public class MainActivity extends Activity {
             return null;
         },()->{message("Comando inviato. Stato riletto dal climatizzatore.");showSelected();});
     }
+    private void chooseEcoPlus(int strength){
+        if(current==null || active==null){message("Connetti e leggi prima lo stato reale.");return;}
+        try{
+            MideaLan.State planned=SafeEco.plan(current,strength);
+            String verb=current.mode==2?"alza":"abbassa";
+            new AlertDialog.Builder(this)
+                .setTitle(strength==1?"ECO+ Comfort":"ECO++ Risparmio")
+                .setMessage("Profilo software: "+verb+" il setpoint di "+strength+" °C fino a "+
+                    String.format(Locale.ITALY,"%.1f",planned.setpoint)+" °C, imposta ventilazione AUTO"+
+                    (current.mode==2?" e attiva ECO nativo.":"." )+
+                    "\n\nNon imposta un minimo di giri del compressore e non garantisce uno specifico consumo.")
+                .setNegativeButton("Annulla",null)
+                .setPositiveButton("Applica e verifica",(d,w)->doControl(s->{
+                    MideaLan.State next=SafeEco.plan(s,strength);
+                    s.setpoint=next.setpoint;
+                    s.fan=next.fan;
+                    s.turbo=next.turbo;
+                    s.eco=next.eco;
+                })).show();
+        }catch(IllegalArgumentException e){message(e.getMessage());}
+    }
+    private void advancedFeatureInfo(String feature){
+        String explanation;
+        if(feature.equals("breeze")){
+            explanation="BreezeleSS usa attuatori e funzioni proprietarie. La presenza del tasto sul telecomando non conferma che il firmware consenta BreezeleSS anche in CALDO. Prima occorre leggere le capacità B5 e validare comandi e risposta sul tuo modello. Non inviamo comandi non verificati.";
+        }else{
+            explanation="La frequenza minima del compressore e la velocità della ventola ESTERNA sono controllate dall'inverter e dalle protezioni di fabbrica. Questa app non forza registri di servizio o limiti di sicurezza. Possiamo monitorare i dati effettivamente esposti e ridurre la richiesta termica mediante i setpoint ECO+.";
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(feature.equals("breeze")?"BreezeleSS in riscaldamento":"Inverter e ventola esterna")
+            .setMessage(explanation)
+            .setPositiveButton("Ho capito",null)
+            .show();
+    }
     private String num(double n){return Double.isNaN(n)?"non disponibile":String.format(Locale.ITALY,"%.1f",n);}
     private String nice(String name,Double value,String unit){return name+": "+(value==null?"non disponibile":String.format(Locale.ITALY,"%.1f %s",value,unit));}
     private String modeName(int m){switch(m){case 1:return "Auto";case 2:return "Freddo";case 3:return "Deumidifica";case 4:return "Caldo";case 5:return "Ventilazione";default:return "Modalità "+m;}}
@@ -262,6 +338,7 @@ public class MainActivity extends Activity {
         control.addView(label("Temperatura richiesta: "+num(current.setpoint)+" °C",19,WHITE,true));
         control.addView(label("Ambiente: "+num(current.indoor)+" °C  ·  Esterno: "+num(current.outdoor)+" °C",14,MUTED,false));
         control.addView(label("Ventilatore: "+(current.fan==102?"Auto":current.fan+"%")+"  ·  ECO: "+(current.eco?"sì":"no"),14,MUTED,false));
+        control.addView(label("Controllo via LAN · Comandi verificati con nuova lettura",12,CYAN,false));
         space(control,8);
         btn(control,current.power?"⏻  Spegni":"⏻  Accendi",()->doControl(s->s.power=!s.power),true);
         LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);
@@ -273,10 +350,41 @@ public class MainActivity extends Activity {
         Spinner modes=new Spinner(this);ArrayAdapter<String> ma=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Auto","Freddo","Deumidifica","Caldo","Ventilazione"});modes.setAdapter(ma);modes.setSelection(Math.max(0,Math.min(current.mode-1,4)));control.addView(modes);
         btn(control,"Applica modalità scelta",()->{int selected=modes.getSelectedItemPosition()+1;doControl(s->s.mode=selected);},false);
         control.addView(label("VENTILAZIONE",12,CYAN,true));
-        Spinner fans=new Spinner(this);String[] opts={"Auto","Bassa 40%","Media 60%","Alta 100%"};
-        Spinner fanSpinner=fans;ArrayAdapter<String> fa=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,opts);fanSpinner.setAdapter(fa);control.addView(fanSpinner);
-        btn(control,"Applica ventilazione",()->{int[] values={102,40,60,100};int newFan=values[fanSpinner.getSelectedItemPosition()];doControl(s->s.fan=newFan);},false);
-        btn(control,current.eco?"Disattiva ECO":"Attiva ECO",()->doControl(s->s.eco=!s.eco),false);
+        Spinner fanSpinner=new Spinner(this);
+        String[] opts={"Auto","20% · silenziosa","40% · bassa","60% · media","80% · alta","100% · massima"};
+        int[] values={102,20,40,60,80,100};
+        ArrayAdapter<String> fa=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,opts);
+        fanSpinner.setAdapter(fa);
+        for(int i=0;i<values.length;i++)if(values[i]==current.fan){fanSpinner.setSelection(i);break;}
+        control.addView(fanSpinner);
+        btn(control,"✓  Applica velocità ventola INTERNA",()->{
+            int speed=values[fanSpinner.getSelectedItemPosition()];
+            if(!SafeEco.indoorFanAdjustable(current)){
+                message("Ventola regolabile solo con macchina accesa in Freddo, Caldo o Ventilazione.");
+                return;
+            }
+            doControl(s->{MideaLan.State next=SafeEco.withIndoorFan(s,speed);s.fan=next.fan;});
+        },false);
+        if(current.mode==2){
+            btn(control,current.eco?"✓  Disattiva ECO standard":"🍃  Attiva ECO standard",()->doControl(s->{if(s.mode!=2)throw new IllegalArgumentException("ECO nativo disponibile solo in Freddo");s.eco=!s.eco;}),false);
+        }
+        space(control,7);
+        control.addView(label("ECO AVANZATO · SENZA MODIFICARE L'INVERTER",13,CYAN,true));
+        control.addView(label("Profili reversibili modificando nuovamente il setpoint. Nessun limite minimo del compressore viene forzato.",12,MUTED,false));
+        LinearLayout ecoRow=new LinearLayout(this);ecoRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button ecoSoft=button("🍃 ECO+ 1°C",()->chooseEcoPlus(1),false);
+        Button ecoStrong=button("⚡ ECO++ 2°C",()->chooseEcoPlus(2),true);
+        ecoRow.addView(ecoSoft,new LinearLayout.LayoutParams(0,dp(60),1));
+        View ecoGap=new View(this);ecoRow.addView(ecoGap,new LinearLayout.LayoutParams(dp(8),dp(2)));
+        ecoRow.addView(ecoStrong,new LinearLayout.LayoutParams(0,dp(60),1));
+        control.addView(ecoRow);
+        space(control,10);
+        btn(control,"↻  Aggiorna i dati reali",this::read,false);
+        if(technicianMode){
+            control.addView(label("FUNZIONI PROFESSIONALI · IN SVILUPPO",13,CYAN,true));
+            btn(control,"❄  BreezeleSS anche in CALDO · Disponibilità",()->advancedFeatureInfo("breeze"),false);
+            btn(control,"⚙  Compressore / ventola ESTERNA · Limiti",()->advancedFeatureInfo("inverter"),false);
+        }
         space(reportBox,12);
         LinearLayout diag=vertical();card(reportBox,diag);diag.addView(label(technicianMode?"DIAGNOSTICA TECNICO · DATI DA VALIDARE":"TELEMETRIA DISPONIBILE",12,CYAN,true));
         diag.addView(label(nice("Compressore",current.compressorHz,"Hz"),15,WHITE,false));
