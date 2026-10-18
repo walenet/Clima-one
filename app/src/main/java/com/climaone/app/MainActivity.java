@@ -13,6 +13,7 @@ import android.widget.*;
 import com.climaone.app.core.MideaLan;
 import com.climaone.app.core.SmartHomeCloud;
 import com.climaone.app.core.PrivateKeys;
+import com.climaone.app.core.TechnicianReport;
 import java.util.*;
 import java.util.concurrent.*;
 
@@ -27,9 +28,12 @@ public class MainActivity extends Activity {
     private final int NAVY=Color.rgb(10,22,34),CARD=Color.rgb(23,42,57),WHITE=Color.WHITE,
             MUTED=Color.rgb(163,184,200),CYAN=Color.rgb(97,222,220),ORANGE=Color.rgb(249,190,101);
     private boolean busy=false;
+    private boolean technicianMode=false;
+    private volatile long lastReadAt=0;
 
     @Override public void onCreate(Bundle b){super.onCreate(b);
         getWindow().setStatusBarColor(NAVY);getWindow().setNavigationBarColor(NAVY);
+        technicianMode=getPreferences(MODE_PRIVATE).getBoolean("technician_mode",false);
         render();
     }
     private GradientDrawable shape(int fill,int radius){GradientDrawable d=new GradientDrawable();d.setColor(fill);d.setCornerRadius(dp(radius));return d;}
@@ -50,8 +54,10 @@ public class MainActivity extends Activity {
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setBackgroundColor(NAVY);
         content=vertical();content.setPadding(dp(18),dp(25),dp(18),dp(30));scroll.addView(content);setContentView(scroll);
         content.addView(label("❄  CLIMA ONE",28,WHITE,true));
-        headerSubtitle=label("Wi-Fi universale per piattaforme Midea compatibili",13,MUTED,false);content.addView(headerSubtitle);
-        space(content,15);
+        headerSubtitle=label(technicianMode?"Modalita tecnico · Diagnostica in sola lettura":"Wi-Fi per climatizzatori Midea compatibili",13,MUTED,false);content.addView(headerSubtitle);
+        space(content,10);
+        btn(content,technicianMode?"🧰  Modalita tecnico ATTIVA · Torna a Cliente":"🧰  Apri modalita TECNICO",this::toggleTechnicianMode,false);
+        space(content,9);
         LinearLayout search=vertical();card(content,search);
         search.addView(label("RICERCA CLIMATIZZATORI",13,CYAN,true));
         search.addView(label("Midea · OEM compatibili · protocolli V2/V3",13,MUTED,false));
@@ -69,6 +75,37 @@ public class MainActivity extends Activity {
         statusText=label("Collega il telefono alla stessa rete Wi-Fi dei climatizzatori, poi tocca Trova.",14,WHITE,false);state.addView(statusText);
         space(content,13);
         content.addView(label("Modalità test: comandi reali soltanto dopo una connessione autenticata. Firmware e limiti inverter non vengono modificati.",12,MUTED,false));
+    }
+    private void toggleTechnicianMode(){
+        technicianMode=!technicianMode;
+        getPreferences(MODE_PRIVATE).edit().putBoolean("technician_mode",technicianMode).apply();
+        render();
+        if(!devices.isEmpty())drawDevices();
+        if(active!=null)showSelected();
+    }
+    private void showTechnicianReport(){
+        if(active==null)return;
+        final String report=TechnicianReport.build(active,current,lastReadAt);
+        ScrollView scroll=new ScrollView(this);
+        TextView lines=label(report,13,Color.rgb(40,50,55),false);
+        lines.setTextIsSelectable(true);
+        lines.setPadding(dp(16),dp(12),dp(16),dp(12));
+        scroll.addView(lines);
+        new AlertDialog.Builder(this)
+            .setTitle("Scheda TECNICO · Solo lettura")
+            .setView(scroll)
+            .setNegativeButton("Chiudi",(d,w)->{})
+            .setNeutralButton("Copia",(d,w)->{
+                android.content.ClipboardManager clip=(android.content.ClipboardManager)getSystemService(Context.CLIPBOARD_SERVICE);
+                clip.setPrimaryClip(ClipData.newPlainText("CLIMA ONE · Scheda tecnica",report));
+                message("Scheda tecnica copiata. Controlla i dati prima di condividerli.");
+            })
+            .setPositiveButton("Condividi",(d,w)->{
+                Intent out=new Intent(Intent.ACTION_SEND);
+                out.setType("text/plain");out.putExtra(Intent.EXTRA_SUBJECT,"CLIMA ONE · Scheda tecnica");
+                out.putExtra(Intent.EXTRA_TEXT,report);
+                startActivity(Intent.createChooser(out,"Condividi scheda tecnica"));
+            }).show();
     }
     private void manualIp(){
         EditText ip=new EditText(this);ip.setSingleLine(true);ip.setHint("192.168.1.50");
@@ -101,7 +138,7 @@ public class MainActivity extends Activity {
         }
         if(devices.isEmpty())box.addView(label("Ancora nessun dispositivo.",14,MUTED,false));
     }
-    private void choose(MideaLan.Device d){active=d;current=null;drawDevices();showSelected();}
+    private void choose(MideaLan.Device d){active=d;current=null;lastReadAt=0;drawDevices();showSelected();}
     private void showSelected(){
         controlBox.removeAllViews();reportBox.removeAllViews();
         if(active==null)return;
@@ -109,6 +146,10 @@ public class MainActivity extends Activity {
         box.addView(label("CLIMATIZZATORE",12,CYAN,true));
         box.addView(label(active.name,22,WHITE,true));box.addView(label("IP locale "+active.ip+" · protocollo V"+active.version,13,MUTED,false));
         space(box,7);
+        if(technicianMode){
+            box.addView(label("La ricerca LAN identifica modulo e protocollo, non il modello commerciale o il circuito frigorifero.",13,MUTED,false));
+            btn(box,"🧰  Scheda tecnico · Copia / Condividi",this::showTechnicianReport,false);
+        }
         if(active.version==3&&(active.token.isEmpty()||active.key.isEmpty())){
             box.addView(label("Questa unità richiede autenticazione V3: collega SmartHome oppure importa token e chiave validi.",13,ORANGE,false));
             btn(box,"Collega account SmartHome",this::smartHomeDialog,true);
@@ -149,7 +190,7 @@ public class MainActivity extends Activity {
     }
     private void read(){if(active==null)return;
         MideaLan.Device selected=active;
-        busyTask("Interrogo il climatizzatore",()->{MideaLan.State state=MideaLan.readState(selected);if(active==selected)current=state;return null;},
+        busyTask("Interrogo il climatizzatore",()->{MideaLan.State state=MideaLan.readState(selected);if(active==selected){current=state;lastReadAt=System.currentTimeMillis();}return null;},
             ()->{message("Dati ricevuti direttamente dalla macchina.");showSelected();});
     }
     private void doControl(java.util.function.Consumer<MideaLan.State> change){
@@ -158,7 +199,7 @@ public class MainActivity extends Activity {
         busyTask("Invio comando e verifico risposta",()->{
             MideaLan.State latest=MideaLan.readState(selected);change.accept(latest);
             MideaLan.State after=MideaLan.apply(selected,latest);
-            if(active==selected)current=after;
+            if(active==selected){current=after;lastReadAt=System.currentTimeMillis();}
             return null;
         },()->{message("Comando inviato. Stato riletto dal climatizzatore.");showSelected();});
     }
@@ -189,7 +230,7 @@ public class MainActivity extends Activity {
         btn(control,"Applica ventilazione",()->{int[] values={102,40,60,100};int newFan=values[fanSpinner.getSelectedItemPosition()];doControl(s->s.fan=newFan);},false);
         btn(control,current.eco?"Disattiva ECO":"Attiva ECO",()->doControl(s->s.eco=!s.eco),false);
         space(reportBox,12);
-        LinearLayout diag=vertical();card(reportBox,diag);diag.addView(label("TELEMETRIA DISPONIBILE",12,CYAN,true));
+        LinearLayout diag=vertical();card(reportBox,diag);diag.addView(label(technicianMode?"DIAGNOSTICA TECNICO · DATI DA VALIDARE":"TELEMETRIA DISPONIBILE",12,CYAN,true));
         diag.addView(label(nice("Compressore",current.compressorHz,"Hz"),15,WHITE,false));
         diag.addView(label(nice("Frequenza obiettivo",current.compressorTargetHz,"Hz"),15,WHITE,false));
         diag.addView(label(nice("Ventilatore",current.fanRpm,"rpm equivalenti"),15,WHITE,false));
@@ -200,6 +241,10 @@ public class MainActivity extends Activity {
             diag.addView(label("Costo energia ciclo: "+String.format(Locale.ITALY,"€ %.2f",current.kwh*price)+"  (tariffa "+String.format(Locale.ITALY,"%.3f",price)+" €/kWh)",15,CYAN,true));
         }
         btn(diag,"Imposta tariffa €/kWh",this::tariffDialog,false);
+        if(technicianMode){
+            btn(diag,"🧰  Genera scheda diagnostica",this::showTechnicianReport,true);
+            diag.addView(label("Pressioni, surriscaldamento e quantita refrigerante NON sono misurati dalla LAN.",12,ORANGE,false));
+        }
         diag.addView(label("I sensori possono non essere supportati; valori non verificati dal produttore.",12,MUTED,false));
     }
     private void tariffDialog(){
