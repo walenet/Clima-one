@@ -13,6 +13,7 @@ import android.widget.*;
 import com.climaone.app.core.MideaLan;
 import com.climaone.app.core.SmartHomeCloud;
 import com.climaone.app.core.PrivateKeys;
+import com.climaone.app.core.DirectPairing;
 import com.climaone.app.core.TechnicianReport;
 import java.util.*;
 import java.util.concurrent.*;
@@ -150,30 +151,65 @@ public class MainActivity extends Activity {
             box.addView(label("La ricerca LAN identifica modulo e protocollo, non il modello commerciale o il circuito frigorifero.",13,MUTED,false));
             btn(box,"🧰  Scheda tecnico · Copia / Condividi",this::showTechnicianReport,false);
         }
-        if(active.version==3&&(active.token.isEmpty()||active.key.isEmpty())){
-            box.addView(label("Questa unità richiede autenticazione V3: collega SmartHome oppure importa token e chiave validi.",13,ORANGE,false));
-            btn(box,"Collega account SmartHome",this::smartHomeDialog,true);
-            btn(box,"Importa token + key",this::tokenDialog,false);
+        if(active.version==3 && !DirectPairing.hasCredentials(active)){
+            box.addView(label("MODULO TROVATO, NON ANCORA AUTENTICATO",13,ORANGE,true));
+            box.addView(label("La rete Wi-Fi è già configurata. Il protocollo V3 protegge i comandi con token e key; la sola ricerca non li fornisce.",13,MUTED,false));
+            btn(box,"1 · Verifica rete LAN (senza cloud)",this::testDirectLan,true);
+            btn(box,"2 · Collega in locale · Opzioni V3",this::pairingOptions,false);
+            btn(box,"Recupera chiavi dal mio account Midea (una volta)",this::smartHomeDialog,false);
+            btn(box,"Importa token + key già in mio possesso",this::tokenDialog,false);
         }else{
-            btn(box,"↻  Leggi stato reale",this::read,true);
-            if(active.version==3)btn(box,"Aggiorna token / key",this::tokenDialog,false);
+            box.addView(label("Chiavi locali disponibili. La connessione sarà confermata solo dopo una lettura reale.",13,MUTED,false));
+            btn(box,"↻  Collega e leggi stato reale via LAN",this::read,true);
+            btn(box,"Verifica raggiungibilità LAN",this::testDirectLan,false);
+            if(active.version==3)btn(box,"Sostituisci token / key",this::tokenDialog,false);
         }
         if(current!=null)showControls();
+    }
+    private void testDirectLan(){
+        if(active==null)return;
+        final MideaLan.Device target=active;
+        final DirectPairing.Result[] result=new DirectPairing.Result[1];
+        busyTask("Verifica porta del modulo Wi-Fi",()->{result[0]=DirectPairing.probe(target);return null;},
+            ()->{if(active==target)message(result[0].description);});
+    }
+    private void pairingOptions(){
+        if(active==null)return;
+        new AlertDialog.Builder(this)
+            .setTitle("Collegamento diretto Midea V3")
+            .setMessage("CLIMA ONE ha già trovato il tuo climatizzatore sul Wi-Fi di casa. Per lo stato e i comandi locali serve una coppia token/key V3 valida. Non è possibile ottenerla dall'IP o dalla semplice ricerca.\\n\\n"
+                +"Percorso praticabile oggi: recuperarla UNA volta con un account Midea autorizzato, senza installare l'app SmartHome. Da quel momento i comandi passano direttamente sulla LAN.\\n\\n"
+                +"Se vuoi zero cloud anche al primo collegamento, serve un percorso BLE/AP supportato dal tuo modulo oppure token/key legittimamente già disponibili: per questo firmware non è ancora verificato.")
+            .setNegativeButton("Chiudi",null)
+            .setNeutralButton("Ho già token + key",(d,w)->tokenDialog())
+            .setPositiveButton("Recupero una tantum",(d,w)->smartHomeDialog())
+            .show();
     }
     private void smartHomeDialog(){if(active==null)return;
         LinearLayout fields=vertical();fields.setPadding(dp(16),dp(8),dp(16),dp(4));
         EditText account=new EditText(this);account.setHint("Email account SmartHome");account.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);fields.addView(account);
         EditText pw=new EditText(this);pw.setHint("Password SmartHome");pw.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);fields.addView(pw);
-        new AlertDialog.Builder(this).setTitle("Autenticazione Midea SmartHome").setMessage("Credenziali inviate solo al servizio Midea tramite HTTPS. Non vengono salvate da CLIMA ONE. Il climatizzatore deve essere associato all'account.")
+        new AlertDialog.Builder(this).setTitle("Recupero chiavi V3 (una volta)").setMessage("Non serve installare SmartHome, ma questa opzione USA il servizio cloud Midea una sola volta per ottenere le chiavi. Inserisci un account Midea che possiedi già. Le credenziali passano via HTTPS al servizio del produttore e non vengono salvate da CLIMA ONE. API non ufficiale: potrebbe non riuscire.")
             .setView(fields).setNegativeButton("Annulla",null).setPositiveButton("Collega",(dia,which)->{
-                String email=account.getText().toString(),pass=pw.getText().toString();
-                busyTask("Autenticazione SmartHome",()->{
-                    SmartHomeCloud cloud=new SmartHomeCloud();cloud.login(email,pass);
-                    String[] values=cloud.tokenKey(active.id);
-                    active.token=values[0];active.key=values[1];
-                    PrivateKeys.save(this,Long.toString(active.id),active.token,active.key);
+                String email=account.getText().toString().trim(),pass=pw.getText().toString();
+                final MideaLan.Device selected=active;
+                busyTask("Richiedo chiavi Midea e verifico la connessione locale",()->{
+                    SmartHomeCloud cloud=new SmartHomeCloud();
+                    cloud.login(email,pass);
+                    String[] values=cloud.tokenKey(selected.id);
+                    if(MideaLan.hex(values[0]).length!=64||MideaLan.hex(values[1]).length!=32)
+                        throw new IllegalArgumentException("Risposta Midea con token/key non validi");
+                    String previousToken=selected.token, previousKey=selected.key;
+                    selected.token=values[0];selected.key=values[1];
+                    try {
+                        MideaLan.State verified=DirectPairing.verifyRead(selected);
+                        PrivateKeys.save(this,Long.toString(selected.id),selected.token,selected.key);
+                        if(active==selected){current=verified;lastReadAt=System.currentTimeMillis();}
+                    } catch(Exception failure) {
+                        selected.token=previousToken;selected.key=previousKey;throw failure;
+                    }
                     return null;
-                },()->{message("Token Midea ricevuto e protetto sul dispositivo. Ora puoi leggere lo stato.");showSelected();});
+                },()->{if(active==selected){message("Connessione locale V3 VERIFICATA: stato ricevuto dal climatizzatore, chiavi cifrate sul telefono.");showSelected();}});
             }).show();
     }
     private void tokenDialog(){if(active==null)return;
@@ -183,14 +219,26 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("Importa credenziali V3").setMessage("Solo token e chiave autorizzati della tua unità. Non condividere questi valori nelle chat.")
             .setView(fields).setNegativeButton("Annulla",null).setPositiveButton("Salva",(dlg,which)->{
                 String t=token.getText().toString().trim(),k=key.getText().toString().trim();
-                try{if(MideaLan.hex(t).length!=64||MideaLan.hex(k).length!=32)throw new IllegalArgumentException("Lunghezza errata");
-                    active.token=t;active.key=k;PrivateKeys.save(this,Long.toString(active.id),t,k);message("Credenziali memorizzate in modo cifrato.");showSelected();
-                }catch(Exception e){message("Credenziali non valide: "+e.getMessage());}
+                try{
+                    if(MideaLan.hex(t).length!=64||MideaLan.hex(k).length!=32)
+                        throw new IllegalArgumentException("Lunghezza errata");
+                    final MideaLan.Device selected=active;
+                    busyTask("Verifico token e key direttamente via LAN",()->{
+                        String oldToken=selected.token,oldKey=selected.key;
+                        selected.token=t;selected.key=k;
+                        try{
+                            MideaLan.State verified=DirectPairing.verifyRead(selected);
+                            PrivateKeys.save(this,Long.toString(selected.id),t,k);
+                            if(active==selected){current=verified;lastReadAt=System.currentTimeMillis();}
+                        }catch(Exception failure){selected.token=oldToken;selected.key=oldKey;throw failure;}
+                        return null;
+                    },()->{if(active==selected){message("Autenticazione V3 verificata. Dati reali letti e credenziali conservate cifrate.");showSelected();}});
+                }catch(Exception e){message("Formato token/key non valido: "+DirectPairing.explainFailure(e));}
             }).show();
     }
     private void read(){if(active==null)return;
         MideaLan.Device selected=active;
-        busyTask("Interrogo il climatizzatore",()->{MideaLan.State state=MideaLan.readState(selected);if(active==selected){current=state;lastReadAt=System.currentTimeMillis();}return null;},
+        busyTask("Interrogo il climatizzatore",()->{MideaLan.State state=DirectPairing.verifyRead(selected);if(active==selected){current=state;lastReadAt=System.currentTimeMillis();}return null;},
             ()->{message("Dati ricevuti direttamente dalla macchina.");showSelected();});
     }
     private void doControl(java.util.function.Consumer<MideaLan.State> change){
