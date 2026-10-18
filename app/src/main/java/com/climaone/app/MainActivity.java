@@ -222,8 +222,8 @@ public class MainActivity extends Activity {
         if(active==null)return;
         new AlertDialog.Builder(this)
             .setTitle("Collegamento diretto Midea V3")
-            .setMessage("CLIMA ONE ha già trovato il tuo climatizzatore sul Wi-Fi di casa. Per lo stato e i comandi locali serve una coppia token/key V3 valida. Non è possibile ottenerla dall'IP o dalla semplice ricerca.\\n\\n"
-                +"Percorso praticabile oggi: recuperarla UNA volta con un account Midea autorizzato, senza installare l'app SmartHome. Da quel momento i comandi passano direttamente sulla LAN.\\n\\n"
+            .setMessage("CLIMA ONE ha già trovato il tuo climatizzatore sul Wi-Fi di casa. Per lo stato e i comandi locali serve una coppia token/key V3 valida. Non è possibile ottenerla dall'IP o dalla semplice ricerca.\n\n"
+                +"Percorso praticabile oggi: recuperarla UNA volta con un account Midea autorizzato, senza installare l'app SmartHome. Da quel momento i comandi passano direttamente sulla LAN.\n\n"
                 +"Se vuoi zero cloud anche al primo collegamento, serve un percorso BLE/AP supportato dal tuo modulo oppure token/key legittimamente già disponibili: per questo firmware non è ancora verificato.")
             .setNegativeButton("Chiudi",null)
             .setNeutralButton("Ho già token + key",(d,w)->tokenDialog())
@@ -320,6 +320,10 @@ public class MainActivity extends Activity {
     private void advancedControl(int tag,int desired,String title,boolean heatingTest){
         if(active==null || current==null || nativeCaps==null){
             message("Prima leggi stato e scansiona le funzioni B5/B1.");
+            return;
+        }
+        if(heatingTest && (!technicianMode || current.mode!=4)){
+            message("BreezeleSS CALDO sperimentale solo in modalita TECNICO e riscaldamento.");
             return;
         }
         if(tag==AdvancedMidea.BREEZELESS&&!nativeCaps.canBreeze()){
@@ -434,9 +438,9 @@ public class MainActivity extends Activity {
             message("Nessun campione ancora registrato. Premi Aggiorna i dati reali.");
             return;
         }
-        StringBuilder data=new StringBuilder("timestamp,acceso,modalita,setpoint_C,ambiente_C,esterno_C,compressore_Hz,target_Hz,ventola_rpm_equivalenti,potenza_W_stimata\\n");
-        for(String line:technicianSamples)data.append(line).append("\\n");
-        String caption="Campioni LAN da decodifica sperimentale; valori da validare con strumenti. Nessuna credenziale inclusa.\\n";
+        StringBuilder data=new StringBuilder("timestamp,acceso,modalita,setpoint_C,ambiente_C,esterno_C,compressore_Hz,target_Hz,ventola_rpm_equivalenti,potenza_W_stimata\n");
+        for(String line:technicianSamples)data.append(line).append("\n");
+        String caption="Campioni LAN da decodifica sperimentale; valori da validare con strumenti. Nessuna credenziale inclusa.\n";
         Intent send=new Intent(Intent.ACTION_SEND);
         send.setType("text/plain");
         send.putExtra(Intent.EXTRA_SUBJECT,"CLIMA ONE · Campioni diagnostici CSV");
@@ -558,7 +562,7 @@ public class MainActivity extends Activity {
             control.addView(label("GEAR: "+featureFlag(caps.gearAvailable)+
                 "  ·  Turbo CALDO: "+featureFlag(caps.turboHeat),12,MUTED,false));
             if(caps.canBreeze()){
-                if(current.mode==4){
+                if(current.mode==4 && technicianMode){
                     btn(control,"❄  Prova BreezeleSS in CALDO (sperimentale)",
                         ()->advancedControl(AdvancedMidea.BREEZELESS,1,"BreezeleSS in CALDO",true),false);
                 }else if(current.mode==2){
@@ -567,7 +571,7 @@ public class MainActivity extends Activity {
                         ()->advancedControl(AdvancedMidea.BREEZELESS,
                             Boolean.TRUE.equals(caps.breezeless)?0:1,"BreezeleSS",false),false);
                 }
-                if(Boolean.TRUE.equals(caps.breezeless)){
+                if(caps.canBreeze()){
                     btn(control,"⏹  Arresta BreezeleSS",
                         ()->advancedControl(AdvancedMidea.BREEZELESS,0,"Stop BreezeleSS",false),false);
                 }
