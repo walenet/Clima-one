@@ -1,0 +1,29 @@
+name: Extract CLIMA ONE Android source
+on:
+  push:
+    paths:
+      - '.github/workflows/import-sources.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Put native Android source files into repository
+        run: |
+          set -e
+          mkdir -p extracted
+          unzip -q CLIMA_ONE_ANDROID_NATIVA_v0.1.zip -d extracted
+          SRC="extracted/CLIMA_ONE_Android_Native"
+          test -f "$SRC/app/src/main/java/com/climaone/app/MainActivity.java"
+          cp -a "$SRC/app" ./
+          cp -a "$SRC/build.gradle" "$SRC/settings.gradle" "$SRC/gradle.properties" ./
+          cp -a "$SRC/tests" ./
+          git add app build.gradle settings.gradle gradle.properties tests
+          if git diff --staged --quiet; then echo "Source already imported"; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: unpack Android source for direct development'
+          git push
