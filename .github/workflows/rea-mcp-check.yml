@@ -1,0 +1,28 @@
+name: REA Local MCP Compatibility Check
+on:
+  push:
+    paths:
+      - 'integrations/rea/**'
+      - '.github/workflows/rea-mcp-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rea-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Read-only prerequisites
+        run: bash integrations/rea/check-requisites.sh
+      - name: Install official pinned REA
+        run: npm install --global rea-agents@6.7.0 --no-audit --no-fund
+      - name: Check REA CLI identity
+        run: |
+          rea --version
+          test "$(rea --version)" = "6.7.0"
+      - name: Verify real stdio MCP initialize and tools/list
+        run: python3 integrations/rea/smoke_mcp.py
