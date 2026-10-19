@@ -58,16 +58,24 @@ public final class TechnicianReport {
             s.append("Ventilazione: ").append(state.fan == 102 ? "Automatica" : String.valueOf(state.fan) + " (codice protocollo)").append("\n");
             s.append("Frequenza compressore: ").append(value(state.compressorHz, "Hz")).append("\n");
             s.append("Frequenza obiettivo: ").append(value(state.compressorTargetHz, "Hz")).append("\n");
-            s.append("Velocita ventilatore (interpretazione protocollo): ").append(value(state.fanRpm, "rpm equivalenti")).append("\n");
-            s.append("Potenza (dato da protocollo, da validare): ").append(value(state.watts, "W")).append("\n");
-            s.append("Energia (dato da protocollo, da validare): ").append(value(state.kwh, "kWh")).append("\n");
+            s.append("Velocita ventola INTERNA: ").append(value(state.fanRpm, "rpm da C1/2, da validare")).append("\n");
+            s.append("Obiettivo ventola INTERNA: ").append(value(state.targetIndoorFanRpm, "rpm da C1/2, da validare")).append("\n");
+            s.append("Velocita ventola ESTERNA: ").append(value(state.outdoorFanRpm, "rpm da C1/3, da validare")).append("\n");
+            s.append("Temperatura batteria INTERNA T2: ").append(value(state.indoorCoilC, "°C (C1/1)")).append("\n");
+            s.append("Temperatura batteria ESTERNA T3: ").append(value(state.outdoorCoilC, "°C (C1/1)")).append("\n");
+            s.append("Aria di ritorno T1: ").append(value(state.indoorReturnC, "°C (C1/1)")).append("\n");
+            s.append("Temperatura esterna T4: ").append(value(state.outdoorAirC, "°C (C1/1)")).append("\n");
+            s.append("Tubo mandata compressore TP: ").append(value(state.dischargePipeC, "°C (C1/1)")).append("\n");
+            s.append("Potenza COMPRESSORE (decodifica C1/7, non assorbimento totale): ").append(value(state.watts, "W")).append("\n");
+            s.append("Energia elettrica TOTALE: non disponibile, serve misura o formato confermato\n");
             s.append("Segnale filtro: ").append(state.filterAlert ? "Flag presente, da verificare" : "Flag non rilevato").append("\n");
         }
         s.append("\nDIAGNOSTICA NON DISPONIBILE AUTOMATICAMENTE\n");
-        s.append("Pressioni refrigerante, surriscaldamento, sottoraffreddamento, carica, assorbimento elettrico certificato, perdite e codici errore non verificati.\n");
+        s.append("Pressioni refrigerante, surriscaldamento, sottoraffreddamento, carica, assorbimento elettrico totale certificato, perdite e codici errore non verificati.\n");
         s.append("Per diagnosi tecniche e sicurezza occorrono strumentazione adeguata, documentazione del modello e verifiche in campo.\n\n");
         s.append("AVVERTENZE\n");
         s.append("Report informativo di un software sperimentale, NON certificazione FGAS, NON rapporto manutenzione, NON diagnosi ufficiale del costruttore.\n");
+        s.append("I valori C1 sono decodifiche del modulo LAN e non letture strumentali certificate. Lo zero puo' indicare apparecchio momentaneamente inattivo.\n");
         s.append("Nessun token o password incluso. Nessun comando di scrittura eseguito per produrre la scheda.\n");
         return s.toString();
     }
