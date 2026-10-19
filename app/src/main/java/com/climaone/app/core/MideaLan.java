@@ -33,7 +33,16 @@ public final class MideaLan {
         public double setpoint=24, indoor=Double.NaN, outdoor=Double.NaN;
         public int mode=2, fan=102, swing=0;
         public Double watts=null, kwh=null, compressorHz=null, compressorTargetHz=null, fanRpm=null;
-        public State copy() { State s=new State(); s.power=power;s.eco=eco;s.turbo=turbo;s.filterAlert=filterAlert;s.setpoint=setpoint;s.indoor=indoor;s.outdoor=outdoor;s.mode=mode;s.fan=fan;s.swing=swing;s.watts=watts;s.kwh=kwh;s.compressorHz=compressorHz;s.compressorTargetHz=compressorTargetHz;s.fanRpm=fanRpm; return s; }
+        public Double outdoorFanRpm=null, targetIndoorFanRpm=null;
+        public Double compressorCurrentA=null, compressorVoltage=null;
+        public Double indoorCoilC=null, outdoorCoilC=null, dischargePipeC=null;
+        public Double indoorReturnC=null, outdoorAirC=null;
+        public State copy() { State s=new State(); s.power=power;s.eco=eco;s.turbo=turbo;s.filterAlert=filterAlert;s.setpoint=setpoint;s.indoor=indoor;s.outdoor=outdoor;s.mode=mode;s.fan=fan;s.swing=swing;s.watts=watts;s.kwh=kwh;s.compressorHz=compressorHz;s.compressorTargetHz=compressorTargetHz;s.fanRpm=fanRpm;s.outdoorFanRpm=outdoorFanRpm;
+            s.targetIndoorFanRpm=targetIndoorFanRpm;
+            s.compressorCurrentA=compressorCurrentA;s.compressorVoltage=compressorVoltage;
+            s.indoorCoilC=indoorCoilC;s.outdoorCoilC=outdoorCoilC;
+            s.dischargePipeC=dischargePipeC;
+            s.indoorReturnC=indoorReturnC;s.outdoorAirC=outdoorAirC;return s; }
     }
     public static byte[] hex(String v) {
         v=v.replaceAll("\\s","");
@@ -144,19 +153,36 @@ public final class MideaLan {
         return s;
     }
     private static double temperature(int raw){return raw==255?Double.NaN:(raw-50)/2.0;}
+    /**
+     * C1 diagnostic groups, using only length-checked offsets from the actual
+     * device payload. Group 7 is compressor power, not verified whole-unit draw.
+     */
     public static void parseExtra(State s,byte[] frame){
-        if(frame==null||frame.length<31||u(frame[10])!=0xc1)return;
-        int o=10, group=u(frame[13])&15;
-        if(group==1&&frame.length>o+15){s.compressorHz=(double)u(frame[o+4]);s.compressorTargetHz=(double)u(frame[o+5]);}
-        if(group==2&&frame.length>o+8)s.fanRpm=(double)(u(frame[o+5])*8);
-        if(group==7&&frame.length>o+11)s.watts=(double)(u(frame[o+10])+256*u(frame[o+11]));
-        if(group==4&&frame.length>o+18){
-            boolean good=true;for(int j=12;j<19;j++){int z=u(frame[o+j]);if((z>>4)>9 || (z&15)>9)good=false;}
-            if(good){
-                double consumption=10000*bcd(u(frame[o+12]))+100*bcd(u(frame[o+13]))+bcd(u(frame[o+14]))+.01*bcd(u(frame[o+15]));
-                if(consumption>0)s.kwh=consumption;
-                if(s.watts==null){int a=u(frame[o+16]),b=u(frame[o+17]),c=u(frame[o+18]);double power=1000*bcd(a)+10*bcd(b)+.1*bcd(c);if(power>0)s.watts=power;}
-            }
+        if(frame==null||frame.length<15||u(frame[0])!=0xaa||
+           u(frame[2])!=0xac||u(frame[10])!=0xc1)return;
+        int o=10;
+        int type=u(frame[o+3]);
+        if(type==0x41 && frame.length>=o+15){
+            s.compressorHz=(double)u(frame[o+4]);
+            s.compressorTargetHz=(double)u(frame[o+5]);
+            s.compressorCurrentA=(double)u(frame[o+7]); // raw amp interpretation requires validation
+            s.compressorVoltage=(double)u(frame[o+8]); // voltage interpretation requires validation
+            s.indoorReturnC=(u(frame[o+10])-30)/2.0;
+            s.indoorCoilC=(u(frame[o+11])-30)/2.0;
+            s.outdoorCoilC=(u(frame[o+12])-50)/2.0;
+            s.outdoorAirC=(u(frame[o+13])-50)/2.0;
+            s.dischargePipeC=(double)u(frame[o+14]);
+        } else if(type==0x42 && frame.length>=o+9){
+            s.targetIndoorFanRpm=(double)(u(frame[o+4])*8);
+            s.fanRpm=(double)(u(frame[o+5])*8);
+        } else if((type==0x43||type==0x03) && frame.length>o+10){
+            s.outdoorFanRpm=(double)(u(frame[o+10])*8);
+        } else if(type==0x47 && frame.length>=o+12){
+            s.watts=(double)(u(frame[o+10])+256*u(frame[o+11]));
+        } else if(type==0x44 && frame.length>=o+19){
+            // Do not infer kWh without confirmed power analysis format for
+            // this specific model. Several Midea firmware versions encode
+            // this group differently (BCD, binary, mixed).
         }
     }
     private static int bcd(int value){return (value>>4)*10+(value&15);}
@@ -214,7 +240,7 @@ public final class MideaLan {
     public static State readState(Device d)throws Exception{
         State s=stateFromFrame(exchange(d,queryState()));
         if(s==null)throw new IOException("Il climatizzatore non ha restituito lo stato C0");
-        for(int group:new int[]{1,2,7,4}){
+        for(int group:new int[]{1,2,3,7}){
             try{parseExtra(s,exchange(d,queryGroup(group)));}catch(Exception ignored){}
         }
         return s;
