@@ -40,16 +40,16 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | head -15
-          cp "$APK" CLIMA_ONE_LAB_v0.6.apk
-          sha256sum CLIMA_ONE_LAB_v0.6.apk
+          cp "$APK" CLIMA_ONE_PRO_v0.7.apk
+          sha256sum CLIMA_ONE_PRO_v0.7.apk
       - uses: actions/upload-artifact@v4
         with:
           name: CLIMA-ONE-Android-APK
-          path: CLIMA_ONE_LAB_v0.6.apk
+          path: CLIMA_ONE_PRO_v0.7.apk
           if-no-files-found: error
       - name: Create public download release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view android-lab-v06-20261018 >/dev/null 2>&1 || gh release create android-lab-v06-20261018 --title "CLIMA ONE LAB v0.6 (sperimentale)" --notes "CLIMA ONE LAB 0.6: installazione separata dalla 0.5. Esperimenti tecnici BreezeleSS heat, GEAR, outdoor SILENT e Super ECO soltanto tramite comandi nativi e capability scan. Nessun override di frequenza compressore, limiti ventole o firmware. Richiede test sul climatizzatore reale."
-          gh release upload android-lab-v06-20261018 CLIMA_ONE_LAB_v0.6.apk --clobber
+          gh release view android-pro-v07-20261019 >/dev/null 2>&1 || gh release create android-pro-v07-20261019 --title "CLIMA ONE PRO v0.7 (alpha)" --notes "CLIMA ONE PRO 0.7: console tecnica separata con setpoint, fan, GEAR, BreezeleSS e SILENT nativi. Non forza limiti di sicurezza. Valori C1 validazione strumentale richiesta."
+          gh release upload android-pro-v07-20261019 CLIMA_ONE_PRO_v0.7.apk --clobber
