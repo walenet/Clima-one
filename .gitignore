@@ -1,0 +1,32 @@
+# Android/Gradle build artifacts
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+
+# REA/MCP local analysis must NOT be committed to public GitHub.
+integrations/rea/.env
+integrations/rea/.env.*
+integrations/rea/samples/
+integrations/rea/workspace/
+integrations/rea/captures/
+integrations/rea/cache/
+integrations/rea/rea-data/
+integrations/rea/tunnel-profiles/
+integrations/rea/*.har
+integrations/rea/*.pcap
+integrations/rea/*.pcapng
+integrations/rea/*.saz
+
+# Local secrets/credentials and runtime outputs
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+*.token
+__pycache__/
+*.pyc
+.DS_Store
