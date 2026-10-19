@@ -8,5 +8,13 @@
         <activity android:name="com.climaone.app.MainActivity" android:exported="true" android:screenOrientation="unspecified">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
+        <activity android:name="com.climaone.app.TechnicianConsoleActivity"
+                  android:label="CLIMA ONE PRO"
+                  android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
     </application>
 </manifest>
