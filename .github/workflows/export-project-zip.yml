@@ -1,0 +1,26 @@
+name: Export complete CLIMA ONE project ZIP
+on:
+  push:
+    paths:
+      - '.github/workflows/export-project-zip.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package all tracked project files
+        run: |
+          set -euo pipefail
+          git archive --format=zip --prefix=CLIMA_ONE_progetto/ HEAD -o CLIMA_ONE_progetto_completo.zip
+          unzip -t CLIMA_ONE_progetto_completo.zip | tail -1
+          unzip -l CLIMA_ONE_progetto_completo.zip | tail -2
+          sha256sum CLIMA_ONE_progetto_completo.zip
+      - name: Upload the complete source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: CLIMA_ONE_progetto_completo
+          path: CLIMA_ONE_progetto_completo.zip
+          if-no-files-found: error
